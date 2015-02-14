@@ -17,14 +17,17 @@
 
 package ringsig_test
 
-import "github.com/Nik-U/ringsig"
+import (
+	"github.com/Nik-U/ringsig"
+	"github.com/Nik-U/ringsig/shacham"
+)
 
 func Example() {
 	// Generate new scheme parameters
-	scheme, _ := ringsig.NewShacham(2)
+	scheme, _ := shacham.New(2)
 
 	// In the real world, these parameters would be saved using scheme.WriteTo
-	// and then loaded by the clients using ringsig.LoadShacham.
+	// and then loaded by the clients using shacham.Load.
 
 	// Two clients generate key pairs
 	alice := scheme.KeyGen()

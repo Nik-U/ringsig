@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with ringsig. If not, see <http://www.gnu.org/licenses/>.
 
-package ringsig
+package genutil
 
 import (
 	"bytes"
@@ -25,22 +25,10 @@ import (
 	"github.com/Nik-U/pbc"
 )
 
-func convertToBytes(wt io.WriterTo) []byte {
+func ConvertToBytes(wt io.WriterTo) []byte {
 	buf := new(bytes.Buffer)
 	wt.WriteTo(buf)
 	return buf.Bytes()
-}
-
-func loadKeyPair(scheme Scheme, r io.Reader) (*KeyPair, error) {
-	var err error
-	p := &KeyPair{}
-	if p.Public, err = scheme.LoadPublicKey(r); err != nil {
-		return nil, err
-	}
-	if p.Private, err = scheme.LoadPrivateKey(r); err != nil {
-		return nil, err
-	}
-	return p, nil
 }
 
 type gobWriter struct {
@@ -50,7 +38,7 @@ type gobWriter struct {
 	err   error
 }
 
-func newGobWriter(w io.Writer) *gobWriter {
+func NewGobWriter(w io.Writer) *gobWriter {
 	gw := &gobWriter{w: w}
 	gw.enc = gob.NewEncoder(gw)
 	return gw
@@ -83,7 +71,7 @@ type gobReader struct {
 	err error
 }
 
-func newGobReader(r io.Reader) *gobReader {
+func NewGobReader(r io.Reader) *gobReader {
 	return &gobReader{dec: gob.NewDecoder(r)}
 }
 

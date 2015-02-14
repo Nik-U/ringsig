@@ -15,7 +15,17 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with ringsig. If not, see <http://www.gnu.org/licenses/>.
 
-package ringsig
+/*
+	Package shacham implements efficient Shacham-Waters ring signatures. This
+	scheme was published by Shacham and Waters in "Efficient Ring Signatures
+	without Random Oracles". It provides full-key disclosure anonymity and
+	insider corruption unforgeability while also being provably secure in the
+	standard model. In this implementation, it relies on three complexity
+	assumptions: integer factorization, computational Diffie-Hellman in prime
+	order cyclic subgroups of elliptic curves, and subgroup decision in
+	composite elliptic curves.
+*/
+package shacham
 
 import (
 	"crypto/rand"
@@ -26,31 +36,34 @@ import (
 	"io"
 
 	"github.com/Nik-U/pbc"
+	"github.com/Nik-U/ringsig"
+	"github.com/Nik-U/ringsig/internal/genutil"
+	"github.com/Nik-U/ringsig/internal/rsutil"
 )
 
-type shachamSecurityParams struct {
+type securityParams struct {
 	rsaBits uint16
 	H       hash.Hash
 	k       int16
 }
 
-func shachamGetParams(securityFactor uint8) (*shachamSecurityParams, error) {
-	var s *shachamSecurityParams
+func shachamGetParams(securityFactor uint8) (*securityParams, error) {
+	var s *securityParams
 	switch securityFactor {
 	case 1:
-		s = &shachamSecurityParams{rsaBits: 1024, H: sha256.New224()}
+		s = &securityParams{rsaBits: 1024, H: sha256.New224()}
 	case 2:
-		s = &shachamSecurityParams{rsaBits: 2048, H: sha512.New384()}
+		s = &securityParams{rsaBits: 2048, H: sha512.New384()}
 	case 3:
-		s = &shachamSecurityParams{rsaBits: 3072, H: sha512.New()}
+		s = &securityParams{rsaBits: 3072, H: sha512.New()}
 	default:
-		return nil, ErrUnsupportedLevel
+		return nil, ringsig.ErrUnsupportedLevel
 	}
 	s.k = int16(s.H.Size()) * 8
 	return s, nil
 }
 
-type shacham struct {
+type scheme struct {
 	// Shared parameters (from global setup)
 	secFac uint8
 	G      *pbc.Params
@@ -62,7 +75,7 @@ type shacham struct {
 	Ahat   *pbc.Element
 
 	// Runtime values
-	secParams *shachamSecurityParams
+	secParams *securityParams
 	pairing   *pbc.Pairing
 	gPower    *pbc.Power
 	hPower    *pbc.Power
@@ -71,7 +84,7 @@ type shacham struct {
 	AhatPower *pbc.Power
 }
 
-func (s *shacham) makeRuntime() {
+func (s *scheme) makeRuntime() {
 	s.gPower = s.g.PreparePower()
 	s.hPower = s.h.PreparePower()
 	s.hPairer = s.h.PreparePairer()
@@ -79,7 +92,7 @@ func (s *shacham) makeRuntime() {
 	s.AhatPower = s.Ahat.PreparePower()
 }
 
-// NewShacham creates a new Shacham-Waters ring signature scheme. Rings can be
+// New creates a new Shacham-Waters ring signature scheme. Rings can be
 // arbitrarily large. The scheme is secure in the standard model, with
 // reasonable performance.
 //
@@ -88,7 +101,7 @@ func (s *shacham) makeRuntime() {
 // and 3 being the most secure. Level 1 is roughly equivalent to 80 bits of
 // security, which is now widely considered to be weak. Levels 2 and 3 are
 // roughly equivalent to 160 and 240 bits of security, respectively.
-func NewShacham(securityFactor uint8) (Scheme, error) {
+func New(securityFactor uint8) (ringsig.Scheme, error) {
 	secParams, err := shachamGetParams(securityFactor)
 	if err != nil {
 		return nil, err
@@ -124,7 +137,7 @@ func NewShacham(securityFactor uint8) (Scheme, error) {
 	B0 := pairing.NewG1().PowZn(g, b0)
 	Ahat := pairing.NewG1().PowZn(h, a)
 
-	s := &shacham{
+	s := &scheme{
 		secFac:    securityFactor,
 		G:         params,
 		g:         g,
@@ -140,9 +153,9 @@ func NewShacham(securityFactor uint8) (Scheme, error) {
 	return s, nil
 }
 
-// LoadShacham restores a Shacham-Waters ring signature scheme from a Reader.
-func LoadShacham(r io.Reader) (Scheme, error) {
-	gr := newGobReader(r)
+// Load restores a Shacham-Waters ring signature scheme from a Reader.
+func Load(r io.Reader) (ringsig.Scheme, error) {
+	gr := genutil.NewGobReader(r)
 	var err error
 
 	var securityFactor uint8
@@ -162,7 +175,7 @@ func LoadShacham(r io.Reader) (Scheme, error) {
 	}
 	pairing := params.NewPairing()
 
-	s := &shacham{
+	s := &scheme{
 		secFac:    securityFactor,
 		G:         params,
 		secParams: secParams,
@@ -193,14 +206,14 @@ func LoadShacham(r io.Reader) (Scheme, error) {
 	temp1 := pairing.NewGT().Pair(s.A, s.h)
 	temp2 := pairing.NewGT().Pair(s.g, s.Ahat)
 	if !temp1.Equals(temp2) {
-		return nil, ErrInvalidParameters
+		return nil, ringsig.ErrInvalidParameters
 	}
 
 	return s, nil
 }
 
-func (s *shacham) WriteTo(w io.Writer) (n int64, err error) {
-	gw := newGobWriter(w)
+func (s *scheme) WriteTo(w io.Writer) (n int64, err error) {
+	gw := genutil.NewGobWriter(w)
 	gw.Encode(s.secFac)
 	gw.Encode(s.G.String())
 	gw.Encode(s.g.CompressedBytes())
@@ -214,15 +227,15 @@ func (s *shacham) WriteTo(w io.Writer) (n int64, err error) {
 	return gw.Count(), gw.Err()
 }
 
-func (s *shacham) Bytes() []byte { return convertToBytes(s) }
+func (s *scheme) Bytes() []byte { return genutil.ConvertToBytes(s) }
 
-type shachamPub struct {
+type publicKey struct {
 	g2b *pbc.Element
 }
 
-func (s *shacham) LoadPublicKey(r io.Reader) (PublicKey, error) {
-	pk := &shachamPub{g2b: s.pairing.NewG1()}
-	gr := newGobReader(r)
+func (s *scheme) LoadPublicKey(r io.Reader) (ringsig.PublicKey, error) {
+	pk := &publicKey{g2b: s.pairing.NewG1()}
+	gr := genutil.NewGobReader(r)
 	gr.DecodeElement(pk.g2b)
 	if gr.Err() != nil {
 		return nil, gr.Err()
@@ -230,28 +243,28 @@ func (s *shacham) LoadPublicKey(r io.Reader) (PublicKey, error) {
 	return pk, nil
 }
 
-func (pk *shachamPub) WriteTo(w io.Writer) (n int64, err error) {
-	gw := newGobWriter(w)
+func (pk *publicKey) WriteTo(w io.Writer) (n int64, err error) {
+	gw := genutil.NewGobWriter(w)
 	gw.Encode(pk.g2b.CompressedBytes())
 	return gw.Count(), gw.Err()
 }
 
-func (pk *shachamPub) Bytes() []byte { return convertToBytes(pk) }
+func (pk *publicKey) Bytes() []byte { return genutil.ConvertToBytes(pk) }
 
-func (pk *shachamPub) Equals(other PublicKey) bool {
-	if pk2, ok := other.(*shachamPub); ok {
+func (pk *publicKey) Equals(other ringsig.PublicKey) bool {
+	if pk2, ok := other.(*publicKey); ok {
 		return pk.g2b.Equals(pk2.g2b)
 	}
 	return false
 }
 
-type shachamPriv struct {
+type privateKey struct {
 	A2b *pbc.Element
 }
 
-func (s *shacham) LoadPrivateKey(r io.Reader) (PrivateKey, error) {
-	sk := &shachamPriv{A2b: s.pairing.NewG1()}
-	gr := newGobReader(r)
+func (s *scheme) LoadPrivateKey(r io.Reader) (ringsig.PrivateKey, error) {
+	sk := &privateKey{A2b: s.pairing.NewG1()}
+	gr := genutil.NewGobReader(r)
 	gr.DecodeElement(sk.A2b)
 	if gr.Err() != nil {
 		return nil, gr.Err()
@@ -259,16 +272,16 @@ func (s *shacham) LoadPrivateKey(r io.Reader) (PrivateKey, error) {
 	return sk, nil
 }
 
-func (sk *shachamPriv) WriteTo(w io.Writer) (n int64, err error) {
-	gw := newGobWriter(w)
+func (sk *privateKey) WriteTo(w io.Writer) (n int64, err error) {
+	gw := genutil.NewGobWriter(w)
 	gw.Encode(sk.A2b.CompressedBytes())
 	return gw.Count(), gw.Err()
 }
 
-func (sk *shachamPriv) Bytes() []byte { return convertToBytes(sk) }
+func (sk *privateKey) Bytes() []byte { return genutil.ConvertToBytes(sk) }
 
-func (s *shacham) LoadKeyPair(r io.Reader) (*KeyPair, error) {
-	keypair, err := loadKeyPair(s, r)
+func (s *scheme) LoadKeyPair(r io.Reader) (*ringsig.KeyPair, error) {
+	keypair, err := rsutil.LoadKeyPair(s, r)
 	if err != nil {
 		return nil, err
 	}
@@ -276,27 +289,27 @@ func (s *shacham) LoadKeyPair(r io.Reader) (*KeyPair, error) {
 	// Sanity check to ensure that the private key matches the public key
 	pair1 := s.pairing.NewGT()
 	pair2 := s.pairing.NewGT()
-	pair1.Pair(s.A, keypair.Public.(*shachamPub).g2b)
-	pair2.Pair(s.g, keypair.Private.(*shachamPriv).A2b)
+	pair1.Pair(s.A, keypair.Public.(*publicKey).g2b)
+	pair2.Pair(s.g, keypair.Private.(*privateKey).A2b)
 	if !pair1.Equals(pair2) {
-		return nil, ErrInvalidKeyPair
+		return nil, ringsig.ErrInvalidKeyPair
 	}
 	return keypair, nil
 }
 
-type shachamSig struct {
+type signature struct {
 	S1 *pbc.Element
 	S2 *pbc.Element
 	C  []*pbc.Element
 	pi []*pbc.Element
 }
 
-func (s *shacham) LoadSignature(r io.Reader) (Signature, error) {
-	sig := &shachamSig{
+func (s *scheme) LoadSignature(r io.Reader) (ringsig.Signature, error) {
+	sig := &signature{
 		S1: s.pairing.NewG1(),
 		S2: s.pairing.NewG1(),
 	}
-	gr := newGobReader(r)
+	gr := genutil.NewGobReader(r)
 
 	var ringSize uint32
 	gr.Decode(&ringSize)
@@ -317,8 +330,8 @@ func (s *shacham) LoadSignature(r io.Reader) (Signature, error) {
 	return sig, nil
 }
 
-func (sig *shachamSig) WriteTo(w io.Writer) (n int64, err error) {
-	gw := newGobWriter(w)
+func (sig *signature) WriteTo(w io.Writer) (n int64, err error) {
+	gw := genutil.NewGobWriter(w)
 
 	var ringSize uint32 = uint32(len(sig.C))
 	gw.Encode(&ringSize)
@@ -332,30 +345,30 @@ func (sig *shachamSig) WriteTo(w io.Writer) (n int64, err error) {
 	return gw.Count(), gw.Err()
 }
 
-func (sig *shachamSig) Bytes() []byte { return convertToBytes(sig) }
+func (sig *signature) Bytes() []byte { return genutil.ConvertToBytes(sig) }
 
-func (s *shacham) KeyGen() *KeyPair {
+func (s *scheme) KeyGen() *ringsig.KeyPair {
 	b := s.pairing.NewZr().Rand()
 	pk := s.pairing.NewG1().PowerZn(s.gPower, b)
 	sk := s.pairing.NewG1().PowZn(s.A, b)
-	return &KeyPair{
-		Public:  &shachamPub{g2b: pk},
-		Private: &shachamPriv{A2b: sk},
+	return &ringsig.KeyPair{
+		Public:  &publicKey{g2b: pk},
+		Private: &privateKey{A2b: sk},
 	}
 }
 
-func (s *shacham) checkRing(ring []PublicKey) ([]*shachamPub, error) {
+func (s *scheme) checkRing(ring []ringsig.PublicKey) ([]*publicKey, error) {
 	// Ring size check
 	if len(ring) < 2 {
-		return nil, ErrRingTooSmall
+		return nil, ringsig.ErrRingTooSmall
 	}
 
 	// Type assert
 	var ok bool
-	ringPk := make([]*shachamPub, len(ring))
+	ringPk := make([]*publicKey, len(ring))
 	for i, pk := range ring {
-		if ringPk[i], ok = pk.(*shachamPub); !ok {
-			return nil, ErrWrongScheme
+		if ringPk[i], ok = pk.(*publicKey); !ok {
+			return nil, ringsig.ErrWrongScheme
 		}
 	}
 
@@ -366,14 +379,14 @@ func (s *shacham) checkRing(ring []PublicKey) ([]*shachamPub, error) {
 				break
 			}
 			if pk1.g2b.Equals(pk2.g2b) {
-				return nil, ErrRingDuplication
+				return nil, ringsig.ErrRingDuplication
 			}
 		}
 	}
 	return ringPk, nil
 }
 
-func (s *shacham) hashMessage(message string) ([]byte, error) {
+func (s *scheme) hashMessage(message string) ([]byte, error) {
 	H := s.secParams.H
 	H.Reset()
 	if _, err := H.Write([]byte(message)); err != nil {
@@ -383,7 +396,7 @@ func (s *shacham) hashMessage(message string) ([]byte, error) {
 	}
 }
 
-func (s *shacham) computeHashMix(temp *pbc.Element, m []byte) {
+func (s *scheme) computeHashMix(temp *pbc.Element, m []byte) {
 	temp.Set(s.u[0]) // Initially set to u'
 	i := 0
 	for j := 0; j < len(m); j++ {
@@ -398,22 +411,22 @@ func (s *shacham) computeHashMix(temp *pbc.Element, m []byte) {
 	}
 }
 
-func (s *shacham) Sign(message string, ring []PublicKey, key *KeyPair) (Signature, error) {
+func (s *scheme) Sign(message string, ring []ringsig.PublicKey, key *ringsig.KeyPair) (ringsig.Signature, error) {
 	// Type assert our keys
 	var ok bool
-	var myPk *shachamPub
-	var mySk *shachamPriv
-	if myPk, ok = key.Public.(*shachamPub); !ok {
-		return nil, ErrWrongScheme
+	var myPk *publicKey
+	var mySk *privateKey
+	if myPk, ok = key.Public.(*publicKey); !ok {
+		return nil, ringsig.ErrWrongScheme
 	}
-	if mySk, ok = key.Private.(*shachamPriv); !ok {
-		return nil, ErrWrongScheme
+	if mySk, ok = key.Private.(*privateKey); !ok {
+		return nil, ringsig.ErrWrongScheme
 	}
 
 	// Type assert the ring and find the index of our key
 	ringSize := len(ring)
 	if ringSize < 2 {
-		return nil, ErrRingTooSmall
+		return nil, ringsig.ErrRingTooSmall
 	}
 	ringPk, err := s.checkRing(ring)
 	if err != nil {
@@ -426,7 +439,7 @@ func (s *shacham) Sign(message string, ring []PublicKey, key *KeyPair) (Signatur
 		}
 	}
 	if myIndex == -1 {
-		return nil, ErrNotInRing
+		return nil, ringsig.ErrNotInRing
 	}
 
 	// Compute the message hash
@@ -436,7 +449,7 @@ func (s *shacham) Sign(message string, ring []PublicKey, key *KeyPair) (Signatur
 	}
 
 	// Allocate output
-	sig := &shachamSig{}
+	sig := &signature{}
 	sig.C = make([]*pbc.Element, ringSize)
 	sig.pi = make([]*pbc.Element, ringSize)
 	sig.S1 = s.pairing.NewG1()
@@ -490,11 +503,11 @@ func (s *shacham) Sign(message string, ring []PublicKey, key *KeyPair) (Signatur
 	return sig, nil
 }
 
-func (s *shacham) Verify(message string, signature Signature, ring []PublicKey) bool {
+func (s *scheme) Verify(message string, genericSig ringsig.Signature, ring []ringsig.PublicKey) bool {
 	// Check types and convert ring
 	var ok bool
-	var sig *shachamSig
-	if sig, ok = signature.(*shachamSig); !ok {
+	var sig *signature
+	if sig, ok = genericSig.(*signature); !ok {
 		return false
 	}
 	ringSize := len(ring)

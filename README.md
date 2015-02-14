@@ -13,14 +13,9 @@ their identity to the recipient without allowing the recipient to
 convincingly convey this proof to a third party.
 
 ## Implementations
-Currently, the ringsig package only includes one ring signature scheme.
-This scheme was published by Shacham and Waters in "Efficient Ring
-Signatures without Random Oracles". It provides full-key disclosure
-anonymity and insider corruption unforgeability while also being provably
-secure in the standard model. In this implementation, it relies on three
-complexity assumptions: integer factorization, computational Diffie-Hellman
-in prime order cyclic subgroups of elliptic curves, and subgroup decision
-in composite elliptic curves.
+Ring signature implementations are placed in subpackages. The rationale for
+this is that some implementations may require complex dependencies that not
+all clients need.
 
 ## Dependencies
 Ringsig makes use of the PBC Go wrapper. Installation of the PBC Go wrapper is

@@ -17,7 +17,11 @@
 
 package ringsig
 
-import "io"
+import (
+	"io"
+
+	"github.com/Nik-U/ringsig/internal/genutil"
+)
 
 // Exportable represents a type that can be encoded into a binary stream. They
 // can be written to a Writer or transformed directly into bytes.
@@ -99,4 +103,4 @@ func (pair *KeyPair) WriteTo(w io.Writer) (n int64, err error) {
 	return
 }
 
-func (pair *KeyPair) Bytes() []byte { return convertToBytes(pair) }
+func (pair *KeyPair) Bytes() []byte { return genutil.ConvertToBytes(pair) }

@@ -15,7 +15,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with ringsig. If not, see <http://www.gnu.org/licenses/>.
 
-package ringsig_test
+package rsutil
 
 import (
 	"bytes"
@@ -102,7 +102,7 @@ func testSigning(t *testing.T, name string, sign bool, verify bool, scheme rings
 	}
 }
 
-func testScheme(t *testing.T, canCheckKeys bool, newScheme func() (ringsig.Scheme, error), loadScheme func(params io.Reader) (ringsig.Scheme, error)) {
+func TestScheme(t *testing.T, canCheckKeys bool, newScheme func() (ringsig.Scheme, error), loadScheme func(params io.Reader) (ringsig.Scheme, error)) {
 	// Generate new parameters
 	scheme, err := newScheme()
 	if err != nil {
@@ -236,26 +236,14 @@ func testScheme(t *testing.T, canCheckKeys bool, newScheme func() (ringsig.Schem
 	}
 }
 
-func TestShacham1(t *testing.T) {
-	testScheme(t, true, func() (ringsig.Scheme, error) { return ringsig.NewShacham(1) }, ringsig.LoadShacham)
-}
-
-func TestShacham2(t *testing.T) {
-	testScheme(t, true, func() (ringsig.Scheme, error) { return ringsig.NewShacham(2) }, ringsig.LoadShacham)
-}
-
-func TestShacham3(t *testing.T) {
-	testScheme(t, true, func() (ringsig.Scheme, error) { return ringsig.NewShacham(3) }, ringsig.LoadShacham)
-}
-
-func benchmarkKeyGen(b *testing.B, scheme ringsig.Scheme) {
+func BenchmarkKeyGen(b *testing.B, scheme ringsig.Scheme) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		scheme.KeyGen()
 	}
 }
 
-func benchmarkSign(b *testing.B, scheme ringsig.Scheme) {
+func BenchmarkSign(b *testing.B, scheme ringsig.Scheme) {
 	alice := scheme.KeyGen()
 	bob := scheme.KeyGen()
 	ring := []ringsig.PublicKey{alice.Public, bob.Public}
@@ -265,7 +253,7 @@ func benchmarkSign(b *testing.B, scheme ringsig.Scheme) {
 	}
 }
 
-func benchmarkVerify(b *testing.B, scheme ringsig.Scheme) {
+func BenchmarkVerify(b *testing.B, scheme ringsig.Scheme) {
 	alice := scheme.KeyGen()
 	bob := scheme.KeyGen()
 	ring := []ringsig.PublicKey{alice.Public, bob.Public}
@@ -281,21 +269,3 @@ func benchmarkVerify(b *testing.B, scheme ringsig.Scheme) {
 		scheme.Verify(message, sig, ring)
 	}
 }
-
-func newShachamOrPanic(securityFactor uint8) ringsig.Scheme {
-	scheme, err := ringsig.NewShacham(securityFactor)
-	if err != nil {
-		panic(err)
-	}
-	return scheme
-}
-
-func BenchmarkShacham1KeyGen(b *testing.B) { benchmarkKeyGen(b, newShachamOrPanic(1)) }
-func BenchmarkShacham2KeyGen(b *testing.B) { benchmarkKeyGen(b, newShachamOrPanic(2)) }
-func BenchmarkShacham3KeyGen(b *testing.B) { benchmarkKeyGen(b, newShachamOrPanic(3)) }
-func BenchmarkShacham1Sign(b *testing.B)   { benchmarkSign(b, newShachamOrPanic(1)) }
-func BenchmarkShacham2Sign(b *testing.B)   { benchmarkSign(b, newShachamOrPanic(2)) }
-func BenchmarkShacham3Sign(b *testing.B)   { benchmarkSign(b, newShachamOrPanic(3)) }
-func BenchmarkShacham1Verify(b *testing.B) { benchmarkVerify(b, newShachamOrPanic(1)) }
-func BenchmarkShacham2Verify(b *testing.B) { benchmarkVerify(b, newShachamOrPanic(2)) }
-func BenchmarkShacham3Verify(b *testing.B) { benchmarkVerify(b, newShachamOrPanic(3)) }
