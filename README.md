@@ -17,9 +17,5 @@ Ring signature implementations are placed in subpackages. The rationale for
 this is that some implementations may require complex dependencies that not
 all clients need.
 
-## Dependencies
-Ringsig makes use of the PBC Go wrapper. Installation of the PBC Go wrapper is
-non-trivial. For instructions, see https://godoc.org/github.com/Nik-U/pbc.
-
 ## Documentation
 For additional documentation, see https://godoc.org/github.com/Nik-U/ringsig.
