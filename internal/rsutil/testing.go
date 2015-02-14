@@ -230,7 +230,7 @@ func TestScheme(t *testing.T, canCheckKeys bool, newScheme func() (ringsig.Schem
 			buf.Write(data)
 			scheme2, err := loadScheme(buf)
 			if scheme2 != nil || err == nil {
-				t.Errorf("importing corrupted data: have %p, want error", scheme2)
+				t.Errorf("importing corrupted data: have %v, want error", scheme2)
 			}
 		}
 	}

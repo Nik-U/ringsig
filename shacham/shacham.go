@@ -333,7 +333,7 @@ func (s *scheme) LoadSignature(r io.Reader) (ringsig.Signature, error) {
 func (sig *signature) WriteTo(w io.Writer) (n int64, err error) {
 	gw := genutil.NewGobWriter(w)
 
-	var ringSize uint32 = uint32(len(sig.C))
+	ringSize := uint32(len(sig.C))
 	gw.Encode(&ringSize)
 	gw.Encode(sig.S1.CompressedBytes())
 	gw.Encode(sig.S2.CompressedBytes())
@@ -391,9 +391,8 @@ func (s *scheme) hashMessage(message string) ([]byte, error) {
 	H.Reset()
 	if _, err := H.Write([]byte(message)); err != nil {
 		return nil, err
-	} else {
-		return H.Sum([]byte{}), err
 	}
+	return H.Sum([]byte{}), nil
 }
 
 func (s *scheme) computeHashMix(temp *pbc.Element, m []byte) {
